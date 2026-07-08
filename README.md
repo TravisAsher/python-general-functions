@@ -4,24 +4,24 @@ Contains general functions that I have created in Python. I will also include my
 
 ## Current Shortcuts:
 ### Panel Navigation:
-Ctrl + Shift + 1 = Focus to Editor\
-Ctrl + Shift + 2 = Focus to Console\
-Ctrl + Shift + 3 = Focus to Help\
-Ctrl + Shift + 4 = Focus to Plot\
-Ctrl + Shift + 5 = Focus to Variables/Environment\
-Ctrl + Shift + 6 = Focus to History
+*Ctrl + Shift + 1* = Focus to Editor\
+*Ctrl + Shift + 2* = Focus to Console\
+*Ctrl + Shift + 3* = Focus to Help\
+*Ctrl + Shift + 4* = Focus to Plot\
+*Ctrl + Shift + 5* = Focus to Variables/Environment\
+*Ctrl + Shift + 6* = Focus to History
 
 
 ### Other:
-Ctrl + Shift + Z = Comment/Uncomment Section\
-Ctrl + Enter = Run Code\
-Alt + Enter = Run Current Line and Advance\
-Ctrl + R = Find and replace text\
-Ctrl + Shift + R = Generate Docstring (only usable within a function definition)\
-Ctrl + Alt + I = Activate Code Formatter
+*Ctrl + Shift + Z* = Comment/Uncomment Section\
+*Ctrl + Enter* = Run Code\
+*Alt + Enter* = Run Current Line and Advance\
+*Ctrl + R* = Find and replace text\
+*Ctrl + Shift + R* = Generate Docstring (only usable within a function definition)\
+*Ctrl + Alt + I* = Activate Code Formatter
 
 ### Not Keyboard Shortcuts:
-*In Spyder, insert a section by typing "# %%" followed by the title; similar to "Insert a section" in RStudio
+In Spyder, insert a section by typing "# %%" followed by the title; this functions similarly to "Insert a section" in RStudio
 
 
 
