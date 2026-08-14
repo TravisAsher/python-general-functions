@@ -9,12 +9,559 @@ Created:  1/21/2018
 Updated to Current R: 6/9/26
 """
 
+import re
 import numpy as np
+import functools as funct
+import operator as oper
+import pandas as pd
+
+
+
+def qck_cut(pattern, string, maxsplit = 0, flags = 0, return_end = False):
+    """
+    Displays `re.split()` results for a single regular expression applied to a string. `Maxsplit` 
+    is by default 0 (which makes it inactive), `flags` is also 0 by default (which means no flags 
+    are present), and an optional parameter, `return_end`, is available as a boolean to return the
+    back end of the cut only; 'return_end' is set to `False` by default. Validates and processes
+    regex patterns with flexible flag handling.
+
+    Parameters
+    ----------
+    pattern : str
+        A regular expression
+    string : str
+        A string to be parsed
+    maxsplit : int, optional
+        An integer that indicates the max number of splits that can occur. The default is 0.
+    flags : int, str, re.RegexFlag, or list/tuple, optional
+        Regex modifiers. Accepts native flags, friendly strings (e.g., 'i', 're.M'), 
+        or collections of them; very flexible. Defaults to 0.
+    return_end : bool, optional
+        Optional boolean selection to return just the final part of the split string. The default 
+        is False.
+
+    Returns
+    -------
+    str
+        Returns a list of string objects that represent what remains from the .split() operation. 
+        If `return_end` is `True`, returns only the last value in the list instead.
+
+    Notes:
+    ------
+    When a list of flags is provided, the function converts them into a single 
+    piped sequence using `functools.reduce` and `operator.or_`. 
+    
+    The `.reduce()` method works by applying the passed function recursively across the list 
+    elements until a single, combined `re.RegexFlag` bitmask remains. 
+    
+    The passed function, `.oper.or_` works by taking two arguments, `a` and `b`, and combining 
+    them using the bitwise OR operator (`a | b`).
+    """
+    
+    # --- Flag Handling -----------------------------------------------
+    if flags != 0:
+        # Indicates the `flags` parameter was passed an argument
+        reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
+        ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
+        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
+        
+        # 1. Handle a list/tuple collection
+        if isinstance(flags, (list,tuple)):
+            # Checks to see if all elements of passed flags list are of the correct type
+            flag_truth = [
+                True if isinstance(elmt, re.RegexFlag) else bool(re.search(reg_flag, str(elmt)))
+                for elmt in flags
+                ]
+            
+            if not all(flag_truth):
+                raise TypeError(
+                    "'flags` collection elements must be re.RegexFlag objects or valid "
+                    "flag strings."
+                    )
+        
+            # Helper to safely clean strings or pass through re.RegexFlag objects
+            coerced_flags = []
+            for elmt in flags:
+                if isinstance(elmt, re.RegexFlag):
+                    coerced_flags.append(elmt)
+                else:
+                    elmt_split = elmt.split(sep=".")
+                    elmt_flag_val = elmt_split[-1].upper()
+                    coerced_flags.append(ailmsux_dict[elmt_flag_val])
+            # Lock out mutually exclusive combinations before reducing
+            if (
+                (re.ASCII in coerced_flags and re.UNICODE in coerced_flags) or 
+                (re.ASCII in coerced_flags and re.LOCALE in coerced_flags)
+            ):
+                raise ValueError("Incompatible flag combinations detected.")
+
+            flags = funct.reduce(oper.or_, coerced_flags)
+                    
+        # 2. Handle a single string flag input (e.g., "re.I" or "x")
+        elif isinstance(flags, str):
+            if not bool(re.search(reg_flag, str(flags))):
+                raise TypeError(
+                    "String input for flags must be a single character in [ailmsux] or of the "
+                    "form 're.~'"
+                    )
+                
+            flag_split = flags.split(sep=".")
+            flag_val = flag_split[-1].upper()
+            flags = ailmsux_dict[flag_val]
+                    
+        # 3. Handle a single re.RegexFlag object
+        elif isinstance(flags, re.RegexFlag):
+            pass
+        
+        # 4. Handle all other data types
+        else:
+            raise TypeError(
+                "`flags` variable only accepts re.RegexFlag, valid strings, or lists/tuples of "
+                "the preceding."
+                )
+        
+    # --- Core Engine Execution -----------------------------------------------        
+    result = re.split(pattern, string, maxsplit = maxsplit, flags = flags)
+    amount = len(result)
+    print(f"\nPattern: '{pattern}' | String: '{string}'\n  -->  \n")
+    for i in list(range(0,amount)):
+        print(f"Index[{i}]: {result[i]} \n")
+    return result if not return_end else result[-1]
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def qck_search(pattern, string, flags = 0):
+    """
+    Performs a search via `re.search()` using the regular expression `pattern` over the string
+    `string`. Displays each group of string values that are isolated by the search; this 
+    corresponds to the function 'capturing' sections surrounded by parentheses (unless using
+    r"(:...") regex syntax). Returns the group or groups of string values that result in the form 
+    of a re.Match type value if the search is successful or a `NoneType` object if it is not. The
+    re.Match method `.groups()` can be applied to the output to easily view the resulting tuple of
+    grouped strings. Validates and processes regex patterns with flexible flag handling.
+
+    Parameters
+    ----------
+    pattern : str
+        The regular expression pattern to compile.
+    string : str
+        The target string to search.
+    flags : int, str, re.RegexFlag, or list/tuple, optional
+        Regex modifiers. Accepts native flags, friendly strings (e.g., 'i', 're.M'), 
+        or collections of them; very flexible. Defaults to 0.
+
+    Returns
+    -------
+    result : re.Match or NoneType
+        Returns a re.Match object if successful or a NoneType object if it fails
+
+    Notes:
+    ------
+    When a list of flags is provided, the function converts them into a single 
+    piped sequence using `functools.reduce` and `operator.or_`. 
+    
+    The `.reduce()` method works by applying the passed function recursively across the list 
+    elements until a single, combined `re.RegexFlag` bitmask remains. 
+    
+    The passed function, `.oper.or_` works by taking two arguments, `a` and `b`, and combining 
+    them using the bitwise OR operator (`a | b`).
+    """
+    
+    # --- Flag Handling -----------------------------------------------
+    if flags != 0:
+        # Indicates the `flags` parameter was passed an argument
+        reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
+        ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
+        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
+        
+        # 1. Handle a list/tuple collection
+        if isinstance(flags, (list,tuple)):
+            # Checks to see if all elements of passed flags list are of the correct type
+            flag_truth = [
+                True if isinstance(elmt, re.RegexFlag) else bool(re.search(reg_flag, str(elmt)))
+                for elmt in flags
+                ]
+            
+            if not all(flag_truth):
+                raise TypeError(
+                    "'flags` collection elements must be re.RegexFlag objects or valid "
+                    "flag strings."
+                    )
+        
+            # Helper to safely clean strings or pass through re.RegexFlag objects
+            coerced_flags = []
+            for elmt in flags:
+                if isinstance(elmt, re.RegexFlag):
+                    coerced_flags.append(elmt)
+                else:
+                    elmt_split = elmt.split(sep=".")
+                    elmt_flag_val = elmt_split[-1].upper()
+                    coerced_flags.append(ailmsux_dict[elmt_flag_val])
+            # Lock out mutually exclusive combinations before reducing
+            if (
+                (re.ASCII in coerced_flags and re.UNICODE in coerced_flags) or 
+                (re.ASCII in coerced_flags and re.LOCALE in coerced_flags)
+            ):
+                raise ValueError("Incompatible flag combinations detected.")
+
+            flags = funct.reduce(oper.or_, coerced_flags)
+                    
+        # 2. Handle a single string flag input (e.g., "re.I" or "x")
+        elif isinstance(flags, str):
+            if not bool(re.search(reg_flag, str(flags))):
+                raise TypeError(
+                    "String input for flags must be a single character in [ailmsux] or of the "
+                    "form 're.~'"
+                    )
+                
+            flag_split = flags.split(sep=".")
+            flag_val = flag_split[-1].upper()
+            flags = ailmsux_dict[flag_val]
+                    
+        # 3. Handle a single re.RegexFlag object
+        elif isinstance(flags, re.RegexFlag):
+            pass
+        
+        # 4. Handle all other data types
+        else:
+            raise TypeError(
+                "`flags` variable only accepts re.RegexFlag, valid strings, or lists/tuples of "
+                "the preceding."
+                )
+
+    # --- Core Engine Execution -----------------------------------------------
+    result = re.search(pattern, string, flags = flags)
+    
+    # If regex finds nothing, it returns None.
+    if result is None:
+        print(f"\nPattern: '{pattern}' | String: '{string}'\n  -->  NO MATCH FOUND\n")
+        return None
+        
+    # The method `.groups()` will extract the actual tuple of the captured parenthesis sections
+    captured_groups = result.groups()
+    amount = len(captured_groups)
+    
+    print(f"\nPattern: '{pattern}' | String: '{string}'\n  -->  \n")
+    for i in list(range(0, amount)):
+        print(f"Group[{i+1}]: {captured_groups[i]} \n") # Groups start counting at 1
+        
+    return result
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def qck_multisplit(pattern, string, maxsplit = 0, flags = 0, track = False):
+    """
+    Displays re.split() results for potentially lists of patterns and strings. Has an optional
+    parameter that can be passed in order to keep track of multiple variables over the course of 
+    the function that outputs the information as a Pandas DataFrame object when the loops 
+    terminate; otherwise, will output a list of lists of the split string results or a single list 
+    of the split string results if pattern and string are strings.  Validates and processes regex
+    patterns with flexible flag handling.
+
+    Parameters
+    ----------
+    pattern : str or list/tuple of str
+        The regular expression pattern(s) to compile and split by.
+    string : str or list/tuple of str
+        The target string(s) to execute the split operations over.
+    maxsplit : int, optional
+        An integer that indicates the max number of splits that can occur. The default is 0.
+    flags : int, str, re.RegexFlag, or list/tuple, optional
+        Regex modifiers. Accepts native flags, friendly strings (e.g., 'i', 're.M'), 
+        or collections of them; very flexible. Defaults to 0.
+    track : bool, optional
+        A boolean value that indicates whether or not you want to keep track of pattern_idx, 
+        pattern, string_idx, string, num_pieces, amount, and split_results for all combinations 
+        of patterns and strings as a Pandas DataFrame object and have it as a return output. 
+        Defaults to False.
+        
+    Returns
+    -------
+    result : Pandas DataFrame, list of list of str, list of str
+        If track is set to True, function will output tracked values in a Pandas DataFrame.
+        Otherwise, will output a list of lists of strings if either pattern or string are a list 
+        or a single list of strings if both pattern and string are single strings.
+
+    Notes:
+    ------
+    When a list of flags is provided, the function converts them into a single 
+    piped sequence using `functools.reduce` and `operator.or_`. 
+    
+    The `.reduce()` method works by applying the passed function recursively across the list 
+    elements until a single, combined `re.RegexFlag` bitmask remains. 
+    
+    The passed function, `.oper.or_` works by taking two arguments, `a` and `b`, and combining 
+    them using the bitwise OR operator (`a | b`).
+    """
+    
+    # --- Flag Handling -----------------------------------------------
+    if flags != 0:
+        # Indicates the `flags` parameter was passed an argument
+        reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
+        ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
+        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
+        
+        # 1. Handle a list/tuple collection
+        if isinstance(flags, (list,tuple)):
+            # Checks to see if all elements of passed flags list are of the correct type
+            flag_truth = [
+                True if isinstance(elmt, re.RegexFlag) else bool(re.search(reg_flag, str(elmt)))
+                for elmt in flags
+                ]
+            
+            if not all(flag_truth):
+                raise TypeError(
+                    "'flags` collection elements must be re.RegexFlag objects or valid "
+                    "flag strings."
+                    )
+        
+            # Helper to safely clean strings or pass through re.RegexFlag objects
+            coerced_flags = []
+            for elmt in flags:
+                if isinstance(elmt, re.RegexFlag):
+                    coerced_flags.append(elmt)
+                else:
+                    elmt_split = elmt.split(sep=".")
+                    elmt_flag_val = elmt_split[-1].upper()
+                    coerced_flags.append(ailmsux_dict[elmt_flag_val])
+            # Lock out mutually exclusive combinations before reducing
+            if (
+                (re.ASCII in coerced_flags and re.UNICODE in coerced_flags) or 
+                (re.ASCII in coerced_flags and re.LOCALE in coerced_flags)
+            ):
+                raise ValueError("Incompatible flag combinations detected.")
+
+            flags = funct.reduce(oper.or_, coerced_flags)
+                    
+        # 2. Handle a single string flag input (e.g., "re.I" or "x")
+        elif isinstance(flags, str):
+            if not bool(re.search(reg_flag, str(flags))):
+                raise TypeError(
+                    "String input for flags must be a single character in [ailmsux] or of the "
+                    "form 're.~'"
+                    )
+                
+            flag_split = flags.split(sep=".")
+            flag_val = flag_split[-1].upper()
+            flags = ailmsux_dict[flag_val]
+                    
+        # 3. Handle a single re.RegexFlag object
+        elif isinstance(flags, re.RegexFlag):
+            pass
+        
+        # 4. Handle all other data types
+        else:
+            raise TypeError(
+                "`flags` variable only accepts re.RegexFlag, valid strings, or lists/tuples of "
+                "the preceding."
+                )
+
+    # --- Tracking DataFrame Setup --------------------------------------------   
+    tracking_data = [] if track else None
+    
+    # --- Core Engine Execution -----------------------------------------------
+    # If either pattern or string are passed as a single string, we wrap them in a list to make 
+    # the code universal
+    patterns = [pattern] if isinstance(pattern, str) else pattern
+    strings = [string] if isinstance(string, str) else string
+    # Run the matrix extraction
+    for p_idx, p in enumerate(patterns):
+        for s_idx, s in enumerate(strings):
+            result = re.split(p, s, maxsplit = maxsplit, flags = flags)
+            amount = len(result)
+            
+            print(f"\nPattern: '{p}' | String: '{s}'\n  -->  \n")
+            for i in range(amount):
+                print(f"Index[{i}]: {result[i]} \n")
+                
+            # If track = True, we update the tracking_data each loop
+            if track:
+                tracking_data.append({
+                    "pattern_idx": p_idx,
+                    "pattern": p,
+                    "string_idx": s_idx,
+                    "string": s,
+                    "num_pieces": amount,
+                    "split_results": result
+                    })
+                
+    # --- Smart Return Logic --------------------------------------------------
+    if track:
+        df_tracking = pd.DataFrame(tracking_data)
+        return df_tracking
+        
+    # If the original inputs were just plain single strings, return a single direct list
+    if isinstance(pattern, str) and isinstance(string, str):
+        return result
+        
+    # Default case: return a clean list of lists containing all the split arrays from the run
+    return [re.split(p, s, maxsplit=maxsplit, flags=flags) for p in patterns for s in strings]
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def qck_findall(pattern, string, flags = 0, track = False):
+    """
+    Performs the pattern expression operations  're.findall()'. If passed a list of patterns or a
+    list of strings, will perform operation on all combinations of patterns and strings. Has an
+    optional parameter that can be passed in order to keep track of multiple variables over the
+    course of the function that outputs the information as a Pandas DataFrame object when the 
+    loops terminate; otherwise, will output various lists of lists, strings, and tuples based on 
+    how many capture groups the patterns have; and a list of strings or tuples results if pattern 
+    and string are strings.  Validates and processes regex patterns with flexible flag handling.
+
+    Parameters
+    ----------
+    pattern : str or list/tuple of str
+        The regular expression pattern(s) to compile and search by.
+    string : str or list/tuple of str
+        The target string(s) to execute the search operations over.
+    flags : int, str, re.RegexFlag, or list/tuple, optional
+        Regex modifiers. Accepts native flags, friendly strings (e.g., 'i', 're.M'), 
+        or collections of them; very flexible. Defaults to 0.
+    track : bool, optional
+        A boolean value that indicates whether or not you want to keep track of pattern_idx, 
+        pattern, string_idx, string, num_matches, and find_results for all combinations of 
+        patterns and strings as a Pandas DataFrame object and have it as a return output. 
+        Defaults to False.
+
+    Returns
+    -------
+    result : pandas.DataFrame or list of str or list of tuple or list of list
+        - If `track=True`: Returns a consolidated pandas DataFrame.
+        - If `track=False` (Single Input): Returns a list of strings, or a list of tuples 
+          if multiple capture groups are present in the pattern.
+        - If `track=False` (Multi-Input Matrix): Returns a 2D nested list containing 
+          lists of strings, lists of tuples, or trivial/degenerate lists for unmatched runs.
+
+    Notes:
+    ------
+    When a list of flags is provided, the function converts them into a single 
+    piped sequence using `functools.reduce` and `operator.or_`. 
+    
+    The `.reduce()` method works by applying the passed function recursively across the list 
+    elements until a single, combined `re.RegexFlag` bitmask remains. 
+    
+    The passed function, `.oper.or_` works by taking two arguments, `a` and `b`, and combining 
+    them using the bitwise OR operator (`a | b`).
+    """
+    
+    # --- Flag Handling -----------------------------------------------
+    if flags != 0:
+        # Indicates the `flags` parameter was passed an argument
+        reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
+        ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
+        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
+        
+        # 1. Handle a list/tuple collection
+        if isinstance(flags, (list,tuple)):
+            # Checks to see if all elements of passed flags list are of the correct type
+            flag_truth = [
+                True if isinstance(elmt, re.RegexFlag) else bool(re.search(reg_flag, str(elmt)))
+                for elmt in flags
+                ]
+            
+            if not all(flag_truth):
+                raise TypeError(
+                    "'flags` collection elements must be re.RegexFlag objects or valid "
+                    "flag strings."
+                    )
+        
+            # Helper to safely clean strings or pass through re.RegexFlag objects
+            coerced_flags = []
+            for elmt in flags:
+                if isinstance(elmt, re.RegexFlag):
+                    coerced_flags.append(elmt)
+                else:
+                    elmt_split = elmt.split(sep=".")
+                    elmt_flag_val = elmt_split[-1].upper()
+                    coerced_flags.append(ailmsux_dict[elmt_flag_val])
+            # Lock out mutually exclusive combinations before reducing
+            if (
+                (re.ASCII in coerced_flags and re.UNICODE in coerced_flags) or 
+                (re.ASCII in coerced_flags and re.LOCALE in coerced_flags)
+            ):
+                raise ValueError("Incompatible flag combinations detected.")
+
+            flags = funct.reduce(oper.or_, coerced_flags)
+                    
+        # 2. Handle a single string flag input (e.g., "re.I" or "x")
+        elif isinstance(flags, str):
+            if not bool(re.search(reg_flag, str(flags))):
+                raise TypeError(
+                    "String input for flags must be a single character in [ailmsux] or of the "
+                    "form 're.~'"
+                    )
+                
+            flag_split = flags.split(sep=".")
+            flag_val = flag_split[-1].upper()
+            flags = ailmsux_dict[flag_val]
+                    
+        # 3. Handle a single re.RegexFlag object
+        elif isinstance(flags, re.RegexFlag):
+            pass
+        
+        # 4. Handle all other data types
+        else:
+            raise TypeError(
+                "`flags` variable only accepts re.RegexFlag, valid strings, or lists/tuples of "
+                "the preceding."
+                )
+    
+    # --- Tracking DataFrame Setup --------------------------------------------   
+    tracking_data = [] if track else None
+    
+    # --- Core Engine Execution -----------------------------------------------
+    # If either pattern or string are passed as a single string, we wrap them in a list to make 
+    # the code universal
+    patterns = [pattern] if isinstance(pattern, str) else pattern
+    strings = [string] if isinstance(string, str) else string
+    # Run the matrix extraction
+    for p_idx, p in enumerate(patterns):
+        for s_idx, s in enumerate(strings):
+            result = re.findall(p, s, flags = flags)
+            print(f"Pattern: '{p}' | String: '{s}'\n  -->  {result}\n")
+
+            # If track = True, we update the tracking_data each loop
+            if track:
+                tracking_data.append({
+                    "pattern_idx": p_idx,
+                    "pattern": p,
+                    "string_idx": s_idx,
+                    "string": s,
+                    "num_matches": len(result),  # Can be 0!
+                    "find_results": result
+                    })
+
+    # --- Smart Return Logic --------------------------------------------------
+    if track:
+        df_tracking = pd.DataFrame(tracking_data)
+        return df_tracking
+        
+    # If the original inputs were just plain single strings, return a single direct list
+    if isinstance(pattern, str) and isinstance(string, str):
+        return result
+        
+    # Default case: return a clean list of lists containing all the split arrays from the run
+    return [re.findall(p, s, flags = flags) for p in patterns for s in strings]
+# --- END FUNCTION ---------------------------------------------------------------------------
+
 
 
 def add_time(in_hour, in_min, in_sec, time_s):
     """
-    Increments inputed hour, minute, and second time (in military format) by desired seconds. All of the preceding functions work to calculate the exact time of day an event ends on based on its start time and the event's duration in seconds. Its inputs are,  respectively, the starting hour (from 0 to 23), the starting minute, that starting second, and the amount of seconds that the event lasts. Its outputs are, respectively, the ending hour (from 1 to 12), the ending minute, the ending second, and whether or not it is AM or PM.'''
+    Increments inputed hour, minute, and second time (in military format) by desired seconds. 
+    All of the preceding functions work to calculate the exact time of day an event ends on 
+    based on its start time and the event's duration in seconds. Its inputs are,  respectively, 
+    the starting hour (from 0 to 23), the starting minute, that starting second, and the amount 
+    of seconds that the event lasts. Its outputs are, respectively, the ending hour (from 1 to 
+    12), the ending minute, the ending second, and whether or not it is AM or PM.'''
 
     Parameters
     ----------
@@ -59,13 +606,13 @@ def add_time(in_hour, in_min, in_sec, time_s):
         period = "PM"
     fin_time = (adj_hour, tot_min, tot_sec, period)
     return fin_time
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def sec_to_hrminsec(time_s):
     """
-    Used in add_time function
+    Converts time in seconds to time in hours, minutes, and seconds. Used in add_time function.
 
     Parameters
     ----------
@@ -96,7 +643,7 @@ def sec_to_hrminsec(time_s):
             add_min = time_m % 60
             add_hour = int(time_m / 60)
     return (add_hour, add_min, add_sec)
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
@@ -128,6 +675,8 @@ def inc_min(mint, in_hour, time_h):
         tot_min = mint % 60
         tot_hour = inc_hour(in_hour + time_h + 1)
     return (tot_hour, tot_min)
+# --- END FUNCTION ---------------------------------------------------------------------------
+
 
 
 def inc_hour(hour):
@@ -153,7 +702,7 @@ def inc_hour(hour):
         else:
             tot_hour = hour % 24
     return tot_hour
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
@@ -189,13 +738,14 @@ def gen_prime(n):
         else:
             test_int += 1
     return collection
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def gen_twinprimes(n):
     """
-    This function generates the first n number of twin prime numbers. It makes use of the gen_prime() function in its procedure
+    This function generates the first n number of twin prime numbers. It makes use of the
+    gen_prime() function in its procedure
 
     Parameters
     ----------
@@ -209,8 +759,9 @@ def gen_twinprimes(n):
     """
 
     twin_primes = []
-    # Our first test run is done on the first n primes using gen_prime(). Since we know that (2,3) is not a twin prime, we are certain
-    # that our first run will not be sufficient to calculate the first n twin primes.
+    # Our first test run is done on the first n primes using gen_prime(). Since we know that 
+    # (2,3) is not a twin prime, we are certain that our first run will not be sufficient to
+    # calculate the first n twin primes.
     test_twins = gen_prime(n)
     for i in range(1, n - 2):
         if test_twins[i + 1] - test_twins[i] == 2:
@@ -229,17 +780,18 @@ def gen_twinprimes(n):
         else:
             pass
         test_next += 1
-        # The below if statement is for debugging purposes only to prevent overflow. This line well be suppressed unless needed.
-        # if test_next > 1000:
+        # The below if statement is for debugging purposes only to prevent overflow. This 
+        # line well be suppressed unless needed. if test_next > 1000:
         # twin_primes = ["o","v","e","r","f","l","o","w","e","r"]
     return twin_primes
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def even_or_odd(x):
     """
-    This function determines whether input is odd, even, or not a real number. If input is a real number but not an integer, function will indicate this
+    This function determines whether input is odd, even, or not a real number. If input is a 
+    real number but not an integer, function will indicate this
 
     Parameters
     ----------
@@ -268,13 +820,14 @@ def even_or_odd(x):
                 e_or_o = "o"
                 return e_or_o
                 print("Integer {} is odd.".format(x))
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def add_even_odd(n):
     """
-    This function adds all the even entries and all of the odd entries separately and reports both respective sums. Uses the even_or_odd() function
+    This function adds all the even entries and all of the odd entries separately and reports
+    both respective sums. Uses the even_or_odd() function
 
     Parameters
     ----------
@@ -301,13 +854,15 @@ def add_even_odd(n):
             n, even_sum, n, odd_sum
         )
     )
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def print_list_separately(list_input, intro=False, outro=False):
     """
-    This function takes a list and prints each of its values on a separate line with a space in between. A prefacing text to be printed before the list value may be included if desired; similarly for an outro text
+    This function takes a list and prints each of its values on a separate line with a space 
+    in between. A prefacing text to be printed before the list value may be included if desired;
+    similarly for an outro text
 
     Parameters
     ----------
@@ -340,13 +895,15 @@ def print_list_separately(list_input, intro=False, outro=False):
     else:
         print("\n")
         print(outro)
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def print_list_fields_var_rows(data, fields, num_rows, intro=False, outro=False):
     """
-    This function takes a list of tuples, a list of fields, an integer number of rows, (optionally) an introductory text, and (optionally) an outro text and prints the intro followed by dictionaries for each rows field into each field name followed by an outro
+    This function takes a list of tuples, a list of fields, an integer number of rows, 
+    (optionally) an introductory text, and (optionally) an outro text and prints the intro 
+    followed by dictionaries for each rows field into each field name followed by an outro
 
     Parameters
     ----------
@@ -387,13 +944,14 @@ def print_list_fields_var_rows(data, fields, num_rows, intro=False, outro=False)
         pass
     else:
         print(outro)
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def list_to_dict(lst):
     """
-    This function takes each entry 'k' of a passed list object and maps it to key 'entry_j' such that the statement 'lst[j] == k' is True
+    This function takes each entry 'k' of a passed list object and maps it to key 'entry_j' 
+    such that the statement 'lst[j] == k' is True
 
     Parameters
     ----------
@@ -419,13 +977,17 @@ def list_to_dict(lst):
     for i in range(0, lst_deg):
         key[dum_list[i]] = lst[i]
     return key
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def PoE_attribute_tracker(state=True):
     """
-    This function allows the user to adjust attribute values for their character from an initial blank state. Things it will do: adjust integer increments or decrements to the included attributes, decline (most) unacceptable input attempts, continue to iterate until the user indicates that they are finished. Things it will not do: accept float value adjustments to attributes, handle user input with multiple colons
+    This function allows the user to adjust attribute values for their character from an initial
+    blank state. Things it will do: adjust integer increments or decrements to the included
+    attributes, decline (most) unacceptable input attempts, continue to iterate until the user
+    indicates that they are finished. Things it will not do: accept float value adjustments to
+    attributes, handle user input with multiple colons
 
     Parameters
     ----------
@@ -485,7 +1047,8 @@ def PoE_attribute_tracker(state=True):
         while get_resp == True:
             print("\nAttributes are: {}".format(attributes))
             response = input(
-                "Which attribute do you wish to adjust and by what amount? Make selection in the form '{attribute}={value}'.\n"
+                "Which attribute do you wish to adjust and by what amount? Make selection in the "
+                "form '{attribute}={value}'.\n"
             )
             if type(response) != str:
                 print("Input must be a string.\n")
@@ -500,7 +1063,9 @@ def PoE_attribute_tracker(state=True):
                 if int_pass == True:
                     get_resp = False
                 else:
-                    print("The value after the colon in your input must be a string of a number \n")
+                    print(
+                        "The value after the colon in your input must be a string of a number \n"
+                        )
         att = response[: response.rfind("=")]
         val = int(response[response.rfind("=") + 1 :])
         att_list[att] += val
@@ -514,12 +1079,26 @@ def PoE_attribute_tracker(state=True):
                 request_cont = False
         if cont in ["no", "n"]:
             state = False
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
-    """This function performs a Markov chain process on an initial state vector 'start' with transition matrix 'trans' for a total number of 'chain_num' Markov chains. It takes as input four variables: 'trans' as a numpy matrix, 'start' as a tuple, 'chain_num' as a nonzero positive integer, and an optional 'dec_place' as a nonzero positive integer that defaults to a value of 5. Once called, the function will prompt the user to indicate one of three possible output options to be provided as input: 'Final' to output only the final vector which results from 'chain_num' Markov chains, 'All' to output a list of each of the state vectors that result from each Markov chain (in order), or 'Other' to output a certain number of the last state vectors that result from their Markov chain applications. If 'Other' is selected, the user is once again prompted for input, this time to specify an 'input' number of state vectors from the tail of the Markov chain procedure to be included as a list in the output. This 'input' number of tail values must be both nonzero positive as well as less than 'chain_num' number of total Markov chains to be performed. For the sake of computation, if the desired number of Markov chains is greater than one million, the function will terminate unless the user specifies to override this precaution via input.
+    """This function performs a Markov chain process on an initial state vector 'start' with
+    transition matrix 'trans' for a total number of 'chain_num' Markov chains. It takes as input
+    four variables: 'trans' as a numpy matrix, 'start' as a tuple, 'chain_num' as a nonzero 
+    positive integer, and an optional 'dec_place' as a nonzero positive integer that defaults to 
+    a value of 5. Once called, the function will prompt the user to indicate one of three possible
+    output options to be provided as input: 'Final' to output only the final vector which results
+    from 'chain_num' Markov chains, 'All' to output a list of each of the state vectors that 
+    result from each Markov chain (in order), or 'Other' to output a certain number of the last
+    state vectors that result from their Markov chain applications. If 'Other' is selected, the 
+    user is once again prompted for input, this time to specify an 'input' number of state 
+    vectors from the tail of the Markov chain procedure to be included as a list in the output. 
+    This 'input' number of tail values must be both nonzero positive as well as less than
+    'chain_num' number of total Markov chains to be performed. For the sake of computation, if 
+    the desired number of Markov chains is greater than one million, the function will terminate
+    unless the user specifies to override this precaution via input.
 
     Parameters
     ----------
@@ -538,13 +1117,15 @@ def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
         DESCRIPTION.
     """
 
-
-    # Our function begins by determining if the passed input values are acceptable values to use to perform the
-    # intended calculations for output. We begin with checks on 'trans':
+    # Our function begins by determining if the passed input values are acceptable values to 
+    # use to perform the intended calculations for output. We begin with checks on 'trans':
     if type(trans) != np.matrix:
         return "The input 'trans' must be of the type 'np.matrix' from the numpy module."
     elif len(trans) != len(trans.transpose()):
-        return "The rank of matrix 'trans' must be equal to the rank of its tranpose 'trans.transpose()'."
+        return (
+        "The rank of matrix 'trans' must be equal to the rank of its "
+        "tranpose 'trans.transpose()'."
+        )
     R = len(trans)
 
     # Next, we perform checks on 'start':
@@ -564,7 +1145,9 @@ def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
         return "The input 'chain_num' cannot be 0 or a negative integer."
     elif chain_num > 1000000:
         override_check = input(
-            "The specified number of 'chain_num' Markov chains will be computationally expensive and may crash the program. Do you still wish to proceed? Respond with either 'Yes' to proceed or anything else to ovveride:\n"
+            "The specified number of 'chain_num' Markov chains will be computationally expensive "
+            "and may crash the program. Do you still wish to proceed? Respond with either 'Yes' "
+            "to proceed or anything else to ovveride:\n"
         )
         if override_check not in ["Yes", "yes"]:
             return
@@ -575,12 +1158,16 @@ def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
     elif dec_place < 0:
         return "The input 'dec_place' cannot be a negative integer without losing all meaning."
 
-    # If all of the above checks are passed, the function will proceed to Markov chain procedure, beginning by
-    # prompting the user for input.
+    # If all of the above checks are passed, the function will proceed to Markov chain 
+    # procedure, beginning by prompting the user for input.
     init_proceed = False
     while init_proceed == False:
         output_type = input(
-            "Would you like to receive the resultant vector of {} chains of your Markov process, would you like to receive a list containing the resultant vector of every step of this Markov process, or would you like to receive a certain number of the last iterations of this Markov process? Respond 'Final' for the first option, 'All' for' the second option, or 'Other' for the third option:\n".format(
+            "Would you like to receive the resultant vector of {} chains of your Markov process, "
+            "would you like to receive a list containing the resultant vector of every step of "
+            "this Markov process, or would you like to receive a certain number of the last "
+            "iterations of this Markov process? Respond 'Final' for the first option, 'All' "
+            "for the second option, or 'Other' for the third option:\n".format(
                 chain_num
             )
         )
@@ -616,7 +1203,10 @@ def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
             proceed = False
             while proceed == False:
                 tail_num = input(
-                    "The output of this function will be a list of the last specified number N applications of the Markov process. What number of last entries would you like to receive? Respond with a nonzero positive integer less than the number of Markov chains:\n"
+                    "The output of this function will be a list of the last specified number "
+                    "N applications of the Markov process. What number of last entries would "
+                    "you like to receive? Respond with a nonzero positive integer less than the"
+                    "number of Markov chains:\n"
                 )
                 int_check = True
                 try:
@@ -640,23 +1230,30 @@ def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
                         return rounded_all
                     elif int(tail_num) < 0:
                         print(
-                            "'{}' is an invalid integer. Please enter a positive nonzero integer:\n".format(                                
+                            "'{}' is an invalid integer. Please enter a positive nonzero "
+                            "integer:\n".format(                                
                                 int(tail_num)
                             )
                         )
                     else:
                         print(
-                            "'{}' is an invalid integer. Please enter an integer less than the number of Markov chains in the process:\n".format(int(tail_num))
+                            "'{}' is an invalid integer. Please enter an integer less than "
+                            "the number of Markov chains in the process:\n".format(int(tail_num))
                         )
                 else:
                     print("Your response is not an integer.\n")
         else:
             print("Your input must be either 'Final', 'All', or 'Other'.")
+# --- END FUNCTION ---------------------------------------------------------------------------
+
 
 
 def preimages_of_Y_when_min_is_rm(Y, unique=False):
     """
-    Takes a positive integer n-tuple and outputs a list of n+1-tuples where new entries are from the set of values ranging from the 1 to the minimum value of the list. By default, all permutations are outputted; however, if optional parameter 'unique' is set to be True, only the unique permutations are outputted.
+    Takes a positive integer n-tuple and outputs a list of n+1-tuples where new entries are from 
+    the set of values ranging from the 1 to the minimum value of the list. By default, all
+    permutations are outputted; however, if optional parameter 'unique' is set to be True, only 
+    the unique permutations are outputted.
 
     Parameters
     ----------
@@ -695,13 +1292,17 @@ def preimages_of_Y_when_min_is_rm(Y, unique=False):
         tuple_set = set(tuple_list)
         pre_image = [list(item) for item in tuple_set]
     return pre_image
-
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
 def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
     """
-    Generates 'number' amount of random integers between the values of 'minim' and 'maxum'; these default to 1, 1, and 10 respectively. By default, repetition is accepted, but one can specify to return only unique integers by changing 'rep'. If returning unique integers, one can indicated if they want to also return the actual list of generated integers that included repeat values
+    Generates 'number' amount of random integers between the values of 'minim' and 'maxum'; 
+    these default to 1, 1, and 10 respectively. By default, repetition is accepted, but one 
+    can specify to return only unique integers by changing 'rep'. If returning unique integers, 
+    one can indicated if they want to also return the actual list of generated integers that
+    included repeat values
 
     Parameters
     ----------
@@ -722,7 +1323,6 @@ def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
         DESCRIPTION.
     """
 
-
     # Check that number, minim, and maxum are integers:
     chk_list = [number, minim, maxum]
     compare2str = ["number", "minim", "maxim"]  ### For referring back to in feedback
@@ -730,7 +1330,10 @@ def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
     if all(item == int for item in chk_type) == False:
         bool_chk = [item != int for item in chk_type]
         invalids = [compare2str[i] for i in range(0, 3) if bool_chk[i]]
-        feedback = "Your input(s) for '{}' are invalid. 'number', 'minim', and 'maxum' must be integers.".format(
+        feedback = (
+        "Your input(s) for '{}' are invalid. 'number', 'minim', and 'maxum' "
+        "must be integers."
+        ).format(
             invalids
         )
         return feedback
@@ -740,7 +1343,8 @@ def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
         if all(pos_chk) == False:
             invalids2 = [compare2str[i] for i in range(0, 3) if pos_chk[i]]
             feedback2 = (
-                "Your input(s) for '{}' are invalid. 'number', 'minim', and 'maxum' must be greater than zero.".format(invalids2)
+                "Your input(s) for '{}' are invalid. 'number', 'minim', and 'maxum' must be "
+                "greater than zero.".format(invalids2)
             )
             return feedback2
 
@@ -782,3 +1386,4 @@ def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
         if return_dummy == True:
             retrn["dummy_vector"] = dummy_vect
         return retrn
+# --- END FUNCTION ---------------------------------------------------------------------------
