@@ -1,5 +1,5 @@
-# Python General Functions & Shortcuts
-This document contains both the general functions that I have created or use in Python as well as the general shortcuts that I use to navigate the Spyder environment.
+# Python General Functions, Shortcuts, and Help Operations
+This document contains the general functions that I have created or use in Python, the general shortcuts that I use to navigate the Spyder environment, and a help operations comparison between R and Python.
 
 
 ## Current Spyder Shortcuts:
@@ -25,7 +25,15 @@ This document contains both the general functions that I have created or use in 
 * In Spyder, to query a method of a data type, use the format "datatype.method?"; for example, to query the method ".sort_values()" of the pandas.DataFrame type, we input "pandas.DataFrame.sort_values?" into the console
     > <sub>**IMPORTANT NOTE**: If the pandas library is imported under a different name, such as `import pandas as pd` -> `pd`, then replace the initial `pandas` with `pd`: `pd.DataFrame.sort_values?`</sub>
 
+## Help Operations R/Python Comparison:
 
+| Intention | Python Framework | R Framework |
+| :--- | :--- | :--- |
+| **Inspect Object Data Structure** | `type(obj)` or `obj.dtypes` | `str(obj)` or `attributes()` |
+| **Read Specific Function Docs** | `help(func)` | `?func` or `help(func)` |
+| **Search Globally by Concept Keyword** | ~~none~~ | `??"keyword"` or `help.search()` |
+| **List Available Package Methods** | `dir(library)` | `ls("package:name")` |
+| **Quick Argument Verification** | `help(func)` | `args(func)` |
 
 
 ## Current Functions:
