@@ -19,7 +19,7 @@ This document contains the general functions that I have created or use in Pytho
 *Ctrl + Alt + Return* = Run Code from Start to Current Selection  
 *Alt + Shift + Return* = Run Code Starting from Current Selection  
 *Ctrl + R* = Find and Replace Text  
-*Ctrl + Shift + R* = Generate Docstring (only usable within a function definition)  
+*Ctrl + Shift + E* = Generate Docstring (only usable within a function definition)  
 *Ctrl + Alt + I* = Activate Code Formatter
 
 ### Not Keyboard Shortcuts:
