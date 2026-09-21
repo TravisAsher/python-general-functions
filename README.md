@@ -1,5 +1,5 @@
 # Python General Functions, Shortcuts, and Help Operations
-This document contains the general functions that I have created or use in Python, the general shortcuts that I use to navigate the Spyder environment, and a help operations comparison between R and Python.
+This document contains the general functions that I have created or use in Python, the general shortcuts that I use to navigate the Spyder environment, and a help operations comparison between R and Python. The document is currently split between two function types: general functions and functions that I use for video games.
 
 
 ## Current Spyder Shortcuts:
@@ -36,7 +36,19 @@ This document contains the general functions that I have created or use in Pytho
 | **Quick Argument Verification** | `help(func)` | `args(func)` |
 
 
-## Current Functions:
+## Current General Functions:
+* **`reproject_to_UTM`**: Takes in a Pandas GeoDataFrame object, checks various conditions to see if a UTM  projection is an appropriate choice for the GeoDataFrame, determines that specific UTM if it exists, and then returns the reprojected GeoDataFrame object
+
+* **`abnormal_row_speed`**: Takes in a Pandas GeoDataFrame object and a threshold, calculates the speed of each object in a `v_id` group in miles/hour, compares these values to the threshold value, and outputs a numpay boolean array object of if a respective row is outside of the threshold or not.
+
+* **`canon_schema_translate_df`**: Inverts a given dictionary schema and renames the inputted dataframe's columns to the new canonical schema.
+
+* **`canon_schema_invert`**: Inverts a given dictionary schema
+
+* **`mad_thresh`**: Calculates the MAD (median absolute deviation) value of a bounding box, determines if a value lies outside of this MAD, and returns this check
+
+* **`mad_thresh_nan`**:
+
 * **`qck_cut()`**: Displays `re.split()` results for a single regular expression applied to a string. `Maxsplit` is by default 0 (which makes it inactive), `flags` is also 0 by default (which means no flags are present), and an optional parameter, `return_end`, is available as a boolean to return the back end of the cut only; `return_end` is set to `False` by default. Validates and processes regex patterns with flexible flag handling.
 
 * **`qck_search()`**: Performs a search via `re.search()` using the regular expression `pattern` over the string `string`. Displays each group of string values that are isolated by the search; this corresponds to the function 'capturing' sections surrounded by parentheses (unless using `r"(:...")` regex syntax). Returns the group or groups of string values that result in the form of a `re.Match` type value if the search is successful or a `NoneType` object if it is not. The `re.Match` method `.groups()` can be applied to the output to easily view the resulting tuple of grouped strings. Validates and processes regex patterns with flexible flag handling.
@@ -67,10 +79,16 @@ This document contains the general functions that I have created or use in Pytho
 
 * **`list_to_dict()`**: This function takes each entry 'k' of a passed list object and maps it to key 'entry_j' such that the statement 'lst[j] == k' is True.
 
-* **`PoE_attribute_tracker()`**: This function allows the user to adjust attribute values for their character from an initial blank state. Things it will do: adjust integer increments or decrements to the included attributes, decline (most) unacceptable input attempts, continue to iterate until the user indicates that they are finished. Things it will not do: accept float value adjustments to handle user input with multiple colons.
-
 * **`MarkovState_Calculator()`**: This function performs a Markov chain process on an initial state vector 'start' with transition matrix 'trans' for a total number of 'chain_num' Markov chains. It takes as input four variables: 'trans' as a numpy matrix, 'start' as a tuple, 'chain_num' as a nonzero positive integer, and an optional 'dec_place' as a nonzero positive integer that defaults to a value of 5. Once called, the function will prompt the user to indicate one of three possible output options to be provided as input: 'Final' to output only the final vector which results from 'chain_num' Markov chains, 'All' to output a list of each of the state vectors that result from each Markov chain (in order), or 'Other' to output a certain number of the last state vectors that result from their Markov chain applications. If 'Other' is selected, the user is once again prompted for input, this time to specify an 'input' number of state vectors from the tail of the Markov chain procedure to be included as a list in the output. This 'input' number of tail values must be both nonzero positive as well as less than 'chain_num' number of total Markov chains to be performed. For the sake of computation, if the desired number of Markov chains is greater than one million, the function will terminate unless the user specifies to override this precaution via input.
 
 * **`preimages_of_Y_when_min_is_rm()`**: This function takes a positive integer n-tuple and outputs a list of n+1-tuples where new entries are from the set of values ranging from the 1 to the minimum value of the list. By default, all permutations are outputted; however, if optional parameter 'unique' is set to be True, only the unique permutations are outputted.
 
 * **`gen_randint()`**: Takes a positive integer n-tuple and outputs a list of n+1-tuples where new entries are from the set of values ranging from the 1 to the minimum value of the list. By default, all permutations are outputted; however, if optional parameter 'unique' is set to be True, only the unique permutations are outputted.
+
+
+## Current Game Functions:
+* **`qck_input`**: Extends the default `input()` function to allow keywords "EXIT" or "QUIT" to automatically break out of the function
+
+* **`ftl_store_qckconvert()`**: A user-input focused program that allows the user to quickly summarize the relevant stats useful for a store in the game, FTL, and translates them into human-interpreted language 
+
+* **`PoE_attribute_tracker()`**: This function allows the user to adjust attribute values for their character from an initial blank state. Things it will do: adjust integer increments or decrements to the included attributes, decline (most) unacceptable input attempts, continue to iterate until the user indicates that they are finished. Things it will not do: accept float value adjustments to handle user input with multiple colons.
