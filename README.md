@@ -14,9 +14,11 @@ This document contains the general functions that I have created or use in Pytho
 
 ### Other:
 *Ctrl + Shift + Z* = Comment/Uncomment Section  
-*Ctrl + Enter* = Run Code  
-*Alt + Enter* = Run Current Line and Advance  
-*Ctrl + R* = Find and replace text  
+*Ctrl + Return* = Run Code  
+*Alt + Return* = Run Current Line and Advance  
+*Ctrl + Alt + Return* = Run Code from Start to Current Selection  
+*Alt + Shift + Return* = Run Code Starting from Current Selection  
+*Ctrl + R* = Find and Replace Text  
 *Ctrl + Shift + R* = Generate Docstring (only usable within a function definition)  
 *Ctrl + Alt + I* = Activate Code Formatter
 
@@ -24,6 +26,7 @@ This document contains the general functions that I have created or use in Pytho
 * In Spyder, insert a section by typing "# %%" followed by the title; this functions similarly to "Insert a section" in RStudio  
 * In Spyder, to query a method of a data type, use the format "datatype.method?"; for example, to query the method ".sort_values()" of the pandas.DataFrame type, we input "pandas.DataFrame.sort_values?" into the console
     > <sub>**IMPORTANT NOTE**: If the pandas library is imported under a different name, such as `import pandas as pd` -> `pd`, then replace the initial `pandas` with `pd`: `pd.DataFrame.sort_values?`</sub>
+* In Spyder, when working with the `pathlib` library, the initial "Run file" {*Ctrl + Return*} sets the current working directory to that script's path/folder
 
 ## Help Operations R/Python Comparison:
 
@@ -37,17 +40,17 @@ This document contains the general functions that I have created or use in Pytho
 
 
 ## Current General Functions:
-* **`reproject_to_UTM`**: Takes in a Pandas GeoDataFrame object, checks various conditions to see if a UTM  projection is an appropriate choice for the GeoDataFrame, determines that specific UTM if it exists, and then returns the reprojected GeoDataFrame object
+* **`reproject_to_UTM`**: Takes in a Pandas GeoDataFrame object, checks various conditions to see if a UTM  projection is an appropriate choice for the GeoDataFrame, determines that specific UTM if it exists, and then returns the reprojected GeoDataFrame object.
 
 * **`abnormal_row_speed`**: Takes in a Pandas GeoDataFrame object and a threshold, calculates the speed of each object in a `v_id` group in miles/hour, compares these values to the threshold value, and outputs a numpay boolean array object of if a respective row is outside of the threshold or not.
 
 * **`canon_schema_translate_df`**: Inverts a given dictionary schema and renames the inputted dataframe's columns to the new canonical schema.
 
-* **`canon_schema_invert`**: Inverts a given dictionary schema
+* **`canon_schema_invert`**: Inverts a given dictionary schema and returns the result.
 
-* **`mad_thresh`**: Calculates the MAD (median absolute deviation) value of a bounding box, determines if a value lies outside of this MAD, and returns this check
+* **`mad_thresh`**: Calculates the MAD (median absolute deviation) value of a bounding box, determines if a value lies outside of this MAD, and returns a numpy boolean array indicating if a given row lies within the MAD (returns `True`) or not (returns `False`).
 
-* **`mad_thresh_nan`**:
+* **`mad_thresh_nan`**: Updated form of mad_thresh that can handle NaN values, due to using `np.nanmedian()` as opposed to `np.median()`.
 
 * **`qck_cut()`**: Displays `re.split()` results for a single regular expression applied to a string. `Maxsplit` is by default 0 (which makes it inactive), `flags` is also 0 by default (which means no flags are present), and an optional parameter, `return_end`, is available as a boolean to return the back end of the cut only; `return_end` is set to `False` by default. Validates and processes regex patterns with flexible flag handling.
 
@@ -87,7 +90,7 @@ This document contains the general functions that I have created or use in Pytho
 
 
 ## Current Game Functions:
-* **`qck_input`**: Extends the default `input()` function to allow keywords "EXIT" or "QUIT" to automatically break out of the function
+* **`qck_input`**: Extends the default `input()` function to allow keywords `EXIT` or `QUIT` to automatically break out of the function
 
 * **`ftl_store_qckconvert()`**: A user-input focused program that allows the user to quickly summarize the relevant stats useful for a store in the game, FTL, and translates them into human-interpreted language 
 
