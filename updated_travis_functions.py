@@ -14,6 +14,165 @@ import numpy as np
 import functools as funct
 import operator as oper
 import pandas as pd
+import geopandas as gpd
+
+
+
+def reproject_to_UTM(gdf, width_threshold = 6, equator_threshold = 0.5):
+    # Restricts all inputs to either Pandas DataFrame objects or subclasses thereof
+    if isinstance(gdf,pd.DataFrame):
+        # Catches the single instance where `gdf` passes above but is unsuitable for our function
+        if not isinstance(gdf,gpd.GeoDataFrame):
+            raise TypeError("Please convert your Pandas DataFrame object into a GeoPandas"
+                            " GeoDataFrame object.")
+    # Eliminates all unacceptable input values
+    else:
+        raise TypeError("This function only accepts GeoPandas GeoDataFrame objects as input.")
+    # We calculate our geodataframes bounding box. If certain conditions are met, our function will
+    # raise an error. Our three conditions are (1: "width limit") spilling over the longitude line,
+    # (2: "latitude limit") being too close to the poles, and (3: "equator gap") significantly
+    # spanning both sides of the equator. Further defining (3), we have 2 further conditions to 
+    # follow: if miny<0<maxy, then if (i) maxy - miny > threshold, OR (ii) [(miny < -0.25) AND
+    # (maxy > 0.25)], our input is rejected from our function.
+    minx, miny, maxx, maxy = gdf.total_bounds
+    # 1: "width limit" check
+    if maxx - minx > width_threshold:
+        raise ValueError("The dataset cross-section is too wide for UTM. Please use a "
+                         "continental equal-area projection instead.")
+    # 2: "latitude limit" check
+    if maxy > 84 or miny < -80:
+        raise ValueError("The dataset lies too close to the absolute poles. Please use the"
+                         " Universal Polar Stereographic Projection (UPS) instead.")
+    # 3: "equator gap" check
+    if miny < 0 < maxy:
+        if maxy - miny > equator_threshold or (miny < -0.25 and maxy > 0.25):
+            raise ValueError("The dataset significantly spans both sides of the equator, which"
+                             " breaks UTM hemisphere math. To prevent massive distance "
+                             "distortion, use a global equal-area grid or process each "
+                             "hemisphere separately.")   
+    # With the checks out of the way, we can now proceed
+    center_lon = (minx+maxx)/2
+    center_lat = (miny+maxy)/2
+    zone_number = 1 + int(np.floor((180+center_lon)/6))
+    direction = "N" if center_lat >= 0 else "S"
+    print(f"Your GeoDataFrame should reproject to 'UTM Zone {zone_number}{direction}'. "
+          "Converting to EPSG...\n")
+    EPSG = f"EPSG:326{str(zone_number)}" if direction == "N" else f"EPSG:327{str(zone_number)}"    
+    reprojected_input = gdf.to_crs(EPSG)
+    print(f"Your new crs is `{EPSG}`.\n")
+    return reprojected_input
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def abnormal_row_speed(gdf, threshold):
+    # 1. Initialize a clean, flat list to serve as your permanent corporate audit log
+    abnormal_row_index = []
+    # 2. Establish your initial search array of target anomalies
+    current_abnormal_index = gdf.query("speed_mph >= @threshold").index.astype(int).tolist()
+    k = 0
+    # 3. Enter the recursive patching loop
+    while len(current_abnormal_index) > 0:
+        # CRITICAL REFINE: Isolate and log ONLY the very first tracking point breaching the limit
+        first_aberration = current_abnormal_index[0]
+        abnormal_row_index.append(first_aberration)
+        
+        # Drop the first aberration from the active table workspace cleanly
+        gdf = gdf.drop(index=first_aberration)
+        
+        # Recompute the relative step links (the next row automatically looks back to the old
+        # point)
+        compare_geom = gdf.groupby("v_id")["geometry"].shift(1)
+        compare_time = gdf.groupby("v_id")["timestamp"].shift(1)
+        
+        gdf = gdf.assign(
+            delta_dist = gdf.distance(compare_geom), 
+            delta_time = (gdf["timestamp"] - compare_time).dt.total_seconds(), 
+            speed_mph = lambda df: 
+                ((df["delta_dist"] / df["delta_time"]) * (1 / 1609.34) * (3600 / 1))
+        )
+        
+        k += 1
+        # Refresh the scan array to verify if any domino tracking points fail the new bridge math
+        current_abnormal_index = gdf.query("speed_mph >= @threshold").index.astype(int).tolist()
+        
+        # Safety breakout wall
+        if k > 50:
+            print("Loop aborted: Infinite cascade loop detected.")
+            break
+        
+    return gdf, abnormal_row_index
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def canon_schema_translate_df(df, canonical_schema):
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Function only accepts Pandas DataFrame type input.")
+    # 1. Invert the master schema to create a flat string lookup dictionary
+    flat_rename_map = {}
+    # Default behavior: when `.rename(columns = DICT)` is passed "DICT" of dict type, it looks
+    # through the column names, sees if it matches any of the UNIQUE key values, and assigns it to
+    # the corresponding value on the RHS (if there are multiple values in a list/tuple, it passes
+    # the entire list/tuple). Because the associate items to each key are not guaranteed to be
+    # unique, we must reverse this layout to feed into `.rename()`: we desire a dictionary of 
+    # each unique value in the values of the original dictionary's keys to the keys assigned to 
+    # the single canonical schema key as their value.
+    # To do this: canonical_schema.items() returns a list of tuples where each tuple has two
+    # values: the canonical key and a tuple of its associated values. We use a for loop to 
+    # iterably extract each canonical key and its associated aliases, and then use an additional
+    # for loop to assign to the (initially) empty dictionary above the alias as a key with value 
+    # equal to the canonical key. When this is finished, we return the application of 
+    # df.rename(flat_rename_map) as the output.
+    for canonical_key, aliases in canonical_schema.items():
+        for alias in aliases:
+            flat_rename_map[alias] = canonical_key  
+    # 2. Let Pandas rename everything in a single, optimized vector pass
+    return df.rename(columns=flat_rename_map)
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def canon_schema_invert(canonical_schema):
+    flat_rename_map = {}
+    for canonical_key, aliases in canonical_schema.items():
+        for alias in aliases:
+            flat_rename_map[alias] = canonical_key  
+    return flat_rename_map
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def mad_thresh(df):
+    arr = np.asarray(df)
+    # We check to see if input is workable with our operations using np.issubdtype()
+    if not np.issubdtype(arr.dtype, np.number):
+        raise TypeError("Calculations can only be performed on numeric data types.")
+    master_med = np.median(arr, axis=0)
+    abs_dist = np.abs(arr - master_med)
+    mad = np.median(abs_dist, axis=0)
+    thresh_interval = (master_med - 4*mad, master_med + 4*mad)
+    low, high = thresh_interval
+    mask = (arr > low) & (arr < high)
+    abberation_check = (~mask).any(axis=1)
+    return abberation_check
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
+def mad_thresh_nan(df):
+    arr = np.asarray(df)
+    if not np.issubdtype(arr.dtype, np.number):
+        raise TypeError("Calculations can only be performed on numeric data types.")
+    master_med = np.nanmedian(arr, axis=0)
+    abs_dist = np.abs(arr - master_med)
+    mad = np.nanmedian(abs_dist, axis=0)
+    thresh_interval = (master_med - 4*mad, master_med + 4*mad)
+    low, high = thresh_interval
+    mask = (arr > low) & (arr < high)
+    abberation_check = (~mask).any(axis=1)
+    return abberation_check
+# --- END FUNCTION ---------------------------------------------------------------------------
 
 
 
@@ -63,7 +222,8 @@ def qck_cut(pattern, string, maxsplit = 0, flags = 0, return_end = False):
         # Indicates the `flags` parameter was passed an argument
         reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
         ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
-        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_re = [re.ASCII, re.IGNORECASE, re.LOCALE, re.MULTILINE, re.DOTALL, re.UNICODE,
+                      re.VERBOSE]
         ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
         
         # 1. Handle a list/tuple collection
@@ -174,7 +334,8 @@ def qck_search(pattern, string, flags = 0):
         # Indicates the `flags` parameter was passed an argument
         reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
         ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
-        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_re = [re.ASCII, re.IGNORECASE , re.LOCALE, re.MULTILINE, re.DOTALL, re.UNICODE,
+                      re.VERBOSE]
         ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
         
         # 1. Handle a list/tuple collection
@@ -303,7 +464,8 @@ def qck_multisplit(pattern, string, maxsplit = 0, flags = 0, track = False):
         # Indicates the `flags` parameter was passed an argument
         reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
         ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
-        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_re = [re.ASCII, re.IGNORECASE, re.LOCALE, re.MULTILINE, re.DOTALL, re.UNICODE,
+                      re.VERBOSE]
         ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
         
         # 1. Handle a list/tuple collection
@@ -456,7 +618,8 @@ def qck_findall(pattern, string, flags = 0, track = False):
         # Indicates the `flags` parameter was passed an argument
         reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
         ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
-        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
+        ailmsux_re = [re.ASCII, re.IGNORECASE, re.LOCALE, re.MULTILINE, re.DOTALL, re.UNICODE,
+                      re.VERBOSE]
         ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
         
         # 1. Handle a list/tuple collection
@@ -981,108 +1144,6 @@ def list_to_dict(lst):
 
 
 
-def PoE_attribute_tracker(state=True):
-    """
-    This function allows the user to adjust attribute values for their character from an initial
-    blank state. Things it will do: adjust integer increments or decrements to the included
-    attributes, decline (most) unacceptable input attempts, continue to iterate until the user
-    indicates that they are finished. Things it will not do: accept float value adjustments to
-    attributes, handle user input with multiple colons
-
-    Parameters
-    ----------
-    state : TYPE, optional
-        DESCRIPTION. The default is True.
-
-    Returns
-    -------
-    None
-    """
-
-    attributes = [
-        "int",
-        "str",
-        "mel_spd",
-        "mel_dam",
-        "acc",
-        "acc_pc",
-        "mana_cost_pc",
-        "atk_spd",
-        "dex",
-        "arm_pc",
-        "enrg_shield_pc",
-        "life_gen_pc",
-        "cst_spd",
-        "mov_spd",
-        "spl_dam_pc",
-        "mel_dam_pc",
-        "life_pc",
-        "evd_pc",
-        "arm_pc",
-        "stun_thrsh",
-        "Jewel_Socket",
-        "life",
-        "evd",
-        "mana_pc",
-        "mana",
-        "mana_gen_pc",
-        "bow_dam_pc",
-        "psn_pc",
-        "bow_ailm_dam_pc",
-        "proj_spd",
-        "proj_dam_pc",
-        "bow_atk_spd",
-        "crit_pc",
-        "lhtn_res_pc",
-        "cold_res_pc",
-        "fire_res_pc",
-    ]
-    attributes.sort()
-    dum_list = [0] * len(attributes)
-    att_list = {}
-    for x in attributes:
-        att_list["{}".format(x)] = dum_list[attributes.index(x)]
-    while state == True:
-        get_resp = True
-        while get_resp == True:
-            print("\nAttributes are: {}".format(attributes))
-            response = input(
-                "Which attribute do you wish to adjust and by what amount? Make selection in the "
-                "form '{attribute}={value}'.\n"
-            )
-            if type(response) != str:
-                print("Input must be a string.\n")
-            elif response.rfind("=") == -1:
-                print("Your input does not match the required form.\n")
-            else:
-                int_pass = True
-                try:
-                    int(response[response.rfind("=") + 1 :])
-                except ValueError:
-                    int_pass = False
-                if int_pass == True:
-                    get_resp = False
-                else:
-                    print(
-                        "The value after the colon in your input must be a string of a number \n"
-                        )
-        att = response[: response.rfind("=")]
-        val = int(response[response.rfind("=") + 1 :])
-        att_list[att] += val
-        print("\n{}".format(att_list))
-        request_cont = True
-        while request_cont == True:
-            cont = input("Would you like to keep going? Select either 'yes' or 'no'.\n")
-            if cont not in ["yes", "no", "y", "n"]:
-                print("Your input must be either 'yes' or 'no'.\n")
-            else:
-                request_cont = False
-        if cont in ["no", "n"]:
-            state = False
-# --- END FUNCTION ---------------------------------------------------------------------------
-
-
-
 def MarkovState_Calculator(trans, start, chain_num, dec_place=5):
     """This function performs a Markov chain process on an initial state vector 'start' with
     transition matrix 'trans' for a total number of 'chain_num' Markov chains. It takes as input
@@ -1356,7 +1417,8 @@ def gen_randint(number=1, minim=1, maxum=10, rep=True, return_dummy=False):
         bool_chk2 = [item != bool for item in chk_type2]
         invalids3 = [compare2str2[i] for i in range(0, 2) if bool_chk2[i]]
         feedback3 = (
-            "Your input(s) for '{}' are invalid. 'rep' and 'return_dummy' must be booleans.".format(
+            "Your input(s) for '{}' are invalid. 'rep' and 'return_dummy' must be "
+            " booleans.".format(
                 invalids3
             )
         )
