@@ -41,6 +41,8 @@ This document contains the general functions that I have created or use in Pytho
 
 ## Current General Functions:
 * **`reproject_to_UTM`**: Takes in a Pandas GeoDataFrame object, checks various conditions to see if a UTM  projection is an appropriate choice for the GeoDataFrame, determines that specific UTM if it exists, and then returns the reprojected GeoDataFrame object.
+  
+* **`row_speed_calc`**: Creates a new variable to compare our main dataframe's geometry to the previous point of that v_id's sequence. 
 
 * **`abnormal_row_speed`**: Takes in a Pandas GeoDataFrame object and a threshold, calculates the speed of each object in a `v_id` group in miles/hour, compares these values to the threshold value, and outputs a numpay boolean array object of if a respective row is outside of the threshold or not.
 
