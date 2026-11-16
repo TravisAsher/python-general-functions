@@ -19,6 +19,27 @@ import geopandas as gpd
 
 
 def reproject_to_UTM(gdf, width_threshold = 6, equator_threshold = 0.5):
+    """
+    This function takes in a Pandas GeoDataFrame object and checks various conditions to see if 
+    a UTM projection is an appropriate choice for the GeoDataFrame. If a UTM projection is to be 
+    deemed appropriate for the input, then the funtion will determine that specific UTM and
+    perform the reprojection onto the GeoDataFrame input.
+    ----------
+    gdf : gpd.GeoDataFrame
+        A Pandas GeoDataFrame object that is to be reprojected.
+    width_threshold : float, optional
+        A float value that represents the maximum width allowed for the GeoDataFrame object in
+        degrees of longitude. The default is 6.
+    equator_threshold : float, optional
+        A float value that represents the maximum span allowed for the GeoDataFrame object in
+        degrees of latitude when crossing the equator. The default is 0.5.
+
+    Returns
+    -------
+    reprojected_input : gpd.GeoDataFrame
+        The reprojection of the input Pandas GeoDataFrame object.
+
+    """
     # Restricts all inputs to either Pandas DataFrame objects or subclasses thereof
     if isinstance(gdf,pd.DataFrame):
         # Catches the single instance where `gdf` passes above but is unsuitable for our function
@@ -65,6 +86,37 @@ def reproject_to_UTM(gdf, width_threshold = 6, equator_threshold = 0.5):
 
 
 
+def row_speed_calc(geoframe, time_col = "timestamp", speed = "mph", group = False):
+    if not group:
+        compare_geom = geoframe["geometry"].shift(1)
+        compare_time = geoframe[time_col].shift(1)
+    else:
+        compare_geom = geoframe.groupby(group)["geometry"].shift(1)
+        compare_time = geoframe.groupby(group)[time_col].shift(1)
+    if speed in ["m/s", "meters/sec", "meters/second", "mps"]:
+        time_conv_constant = 1
+        speed_col_name = "speed_mps"
+    elif speed in ["km/h", "km/hour", "kilometers/hour", "kmph", "kph"]:
+        time_conv_constant = (1/1000) * (3600/1)
+        speed_col_name = "speed_kmh"
+    else:
+        time_conv_constant = (1/1609.34) * (3600/1)
+        speed_col_name = "speed_mph"
+    # We build our single dictionary with multiple keys to unpack for `.assign()` later
+    #   The benefit? Keys are string names (for definition)), and the values are raw series/lambda
+    #   functions
+    bulk_columns = {
+        "delta_dist": geoframe.distance(compare_geom),
+        "delta_time": (geoframe[time_col] - compare_time).dt.total_seconds(),
+        speed_col_name: lambda frame: 
+           (frame["delta_dist"]/frame["delta_time"])*time_conv_constant
+        }
+    geoframe = geoframe.assign(**bulk_columns)
+    return geoframe
+# --- END FUNCTION ---------------------------------------------------------------------------
+
+
+
 def abnormal_row_speed(gdf, threshold):
     # 1. Initialize a clean, flat list to serve as your permanent corporate audit log
     abnormal_row_index = []
@@ -82,14 +134,15 @@ def abnormal_row_speed(gdf, threshold):
         
         # Recompute the relative step links (the next row automatically looks back to the old
         # point)
+        
         compare_geom = gdf.groupby("v_id")["geometry"].shift(1)
         compare_time = gdf.groupby("v_id")["timestamp"].shift(1)
         
         gdf = gdf.assign(
             delta_dist = gdf.distance(compare_geom), 
             delta_time = (gdf["timestamp"] - compare_time).dt.total_seconds(), 
-            speed_mph = lambda df: 
-                ((df["delta_dist"] / df["delta_time"]) * (1 / 1609.34) * (3600 / 1))
+            speed_mph = lambda df: ((df["delta_dist"] / df["delta_time"]) 
+                                    * (1 / 1609.34) * (3600 / 1))
         )
         
         k += 1
@@ -567,7 +620,7 @@ def qck_multisplit(pattern, string, maxsplit = 0, flags = 0, track = False):
 
 
 
-def qck_findall(pattern, string, flags = 0, track = False):
+def qck_findall(pattern, string, flags = 0, track = False, suppress = False):
     """
     Performs the pattern expression operations  're.findall()'. If passed a list of patterns or a
     list of strings, will perform operation on all combinations of patterns and strings. Has an
@@ -575,7 +628,9 @@ def qck_findall(pattern, string, flags = 0, track = False):
     course of the function that outputs the information as a Pandas DataFrame object when the 
     loops terminate; otherwise, will output various lists of lists, strings, and tuples based on 
     how many capture groups the patterns have; and a list of strings or tuples results if pattern 
-    and string are strings.  Validates and processes regex patterns with flexible flag handling.
+    and string are strings. By default will print the result of each iteration of `re.findall()`
+    onto the console; this output can be disabled by an optional parameter. Validates and
+    processes regex patterns with flexible flag handling.
 
     Parameters
     ----------
@@ -591,6 +646,10 @@ def qck_findall(pattern, string, flags = 0, track = False):
         pattern, string_idx, string, num_matches, and find_results for all combinations of 
         patterns and strings as a Pandas DataFrame object and have it as a return output. 
         Defaults to False.
+    suppress : bool, optional
+        A boolean value that is used to indicate whether you want to suppress the result of each
+        iteration of `re.findall()` being printed to the console.
+        Defauls to False.
 
     Returns
     -------
@@ -618,8 +677,7 @@ def qck_findall(pattern, string, flags = 0, track = False):
         # Indicates the `flags` parameter was passed an argument
         reg_flag = r"(?i)^(?:re\.)?([ailmsux])$"
         ailmsux = ['A', 'I', 'L', 'M', 'S', 'U', 'X']
-        ailmsux_re = [re.ASCII, re.IGNORECASE, re.LOCALE, re.MULTILINE, re.DOTALL, re.UNICODE,
-                      re.VERBOSE]
+        ailmsux_re = [re.ASCII,re.IGNORECASE,re.LOCALE,re.MULTILINE,re.DOTALL,re.UNICODE,re.VERBOSE]
         ailmsux_dict = dict(zip(ailmsux, ailmsux_re))
         
         # 1. Handle a list/tuple collection
@@ -689,7 +747,10 @@ def qck_findall(pattern, string, flags = 0, track = False):
     for p_idx, p in enumerate(patterns):
         for s_idx, s in enumerate(strings):
             result = re.findall(p, s, flags = flags)
-            print(f"Pattern: '{p}' | String: '{s}'\n  -->  {result}\n")
+            
+            # If suppress is not set to True, procedural steps will be printed
+            if not suppress:
+                print(f"Pattern: '{p}' | String: '{s}'\n  -->  {result}\n")
 
             # If track = True, we update the tracking_data each loop
             if track:
